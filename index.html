@@ -13,15 +13,12 @@
         .container { max-width: 850px; margin: 15px auto; padding: 10px; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); margin-bottom: 20px; }
         h3 { margin: 0 0 15px 0; color: var(--primary); font-size: 1.1rem; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px; }
-        label { font-size: 0.85rem; font-weight: bold; color: #666; margin-top: 10px; display: block; }
         input, select, textarea { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
         .btn { background: var(--primary); color: white; border: none; padding: 16px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; transition: 0.2s; }
-        .btn:active { transform: scale(0.98); }
         .btn-add { background: var(--accent); width: auto; padding: 10px 25px; margin-top: 10px; }
         .produto-resultado { border: 1px solid #e5e7eb; padding: 15px; margin-top: 10px; background: #fff; border-radius: 8px; border-left: 5px solid var(--primary); }
         .item-carrinho { display: grid; grid-template-columns: 1fr auto; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
-        #status { font-size: 0.8rem; text-align: center; margin-bottom: 10px; font-weight: bold; }
-        .total-box { background: var(--primary); color: white; padding: 15px; border-radius: 8px; text-align: right; font-size: 1.3rem; font-weight: bold; margin-top: 10px; }
+        #status { font-size: 0.85rem; text-align: center; margin-bottom: 10px; color: #004a99; font-weight: bold; background: #dbeafe; padding: 8px; border-radius: 8px; }
     </style>
 </head>
 <body>
@@ -29,13 +26,12 @@
 <header>FLVX - SISTEMA DE COTAÇÃO</header>
 
 <div class="container">
-    <div id="status">⏳ Sincronizando com Google Drive...</div>
+    <div id="status">⏳ Sincronizando com base de dados FLVX...</div>
 
     <div class="card">
-        <h3>1. Cliente e Regras Fiscais</h3>
-        <label>Classificação Fiscal / Canal</label>
+        <h3>1. Configuração Fiscal</h3>
         <select id="perfil_fiscal">
-            <option value="">Escolha uma opção...</option>
+            <option value="">Selecione o Canal de Venda...</option>
             <option value="SP REVENDA SN">SP REVENDA SN</option>
             <option value="SP REVENDA LP">SP REVENDA LP</option>
             <option value="SP REVENDA LR">SP REVENDA LR</option>
@@ -50,23 +46,21 @@
             <option value="MG ATACADO LR">MG ATACADO LR</option>
             <option value="CONSTRUTORA">CONSTRUTORA</option>
         </select>
-        <input type="text" id="cli_nome" placeholder="Razão Social / Nome Fantasia">
-        <input type="text" id="cli_cnpj" placeholder="CNPJ">
-        <input type="text" id="cli_local" placeholder="Cidade / UF">
+        <input type="text" id="cli_nome" placeholder="Nome do Cliente / Razão Social">
     </div>
 
     <div class="card">
-        <h3>2. Adicionar Produtos</h3>
-        <input type="text" id="busca" placeholder="Pesquisar por Código ou Nome..." oninput="buscar()">
+        <h3>2. Pesquisar por Código ou Nome</h3>
+        <input type="text" id="busca" placeholder="Ex: 1020 ou Torneira..." oninput="buscar()">
         <div id="resultados"></div>
     </div>
 
     <div class="card">
-        <h3>3. Resumo da Cotação</h3>
-        <div id="carrinho_lista"><em>Nenhum item adicionado.</em></div>
-        <div class="total-box" id="total_display">Total: R$ 0,00</div>
-        <textarea id="obs" placeholder="Prazo de pagamento, frete e observações gerais..."></textarea>
-        <button class="btn" onclick="gerarPDF()">GERAR ORÇAMENTO (PDF)</button>
+        <h3>3. Orçamento</h3>
+        <div id="carrinho_lista"><em>Lista vazia.</em></div>
+        <div id="total_display" style="text-align:right; font-weight:bold; font-size:1.4rem; margin: 15px 0;">Total: R$ 0,00</div>
+        <textarea id="obs" placeholder="Observações, Prazo e Frete..."></textarea>
+        <button class="btn" onclick="gerarPDF()">GERAR PDF</button>
     </div>
 </div>
 
@@ -75,15 +69,18 @@
     let carrinho = [];
     const LINK_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR2ZD5mHtSutLQKXCW5Ps1zG-EHdRs_zFdBBjOHR9VRK9Ag57iNbAFsb7799stO1w/pub?output=csv';
 
-    // Carregamento inicial
     window.onload = () => {
         Papa.parse(LINK_CSV, {
             download: true,
             header: true,
             skipEmptyLines: true,
             complete: (res) => {
-                db = res.data;
-                document.getElementById('status').innerText = `✅ Base Conectada: ${db.length} produtos disponíveis.`;
+                // Filtra para garantir que só pegamos linhas que tenham o Código preenchido (limpa as 3 primeiras linhas)
+                db = res.data.filter(linha => {
+                    const keys = Object.keys(linha);
+                    return linha["Código"] && linha["Código"].trim() !== "" && linha["Código"] !== "Código";
+                });
+                document.getElementById('status').innerText = `✅ Sucesso! ${db.length} produtos carregados.`;
             }
         });
     };
@@ -95,11 +92,16 @@
 
         if (termo.length < 2) return;
 
-        // Uso das colunas exatas: "Código" e "Descrição do produto"
-        const filtro = db.filter(p => 
-            (p["Código"] && p["Código"].toString().toUpperCase().includes(termo)) || 
-            (p["Descrição do produto"] && p["Descrição do produto"].toUpperCase().includes(termo))
-        ).slice(0, 10);
+        // Busca flexível ignorando espaços
+        const filtro = db.filter(p => {
+            const cod = String(p["Código"] || "").toUpperCase();
+            const desc = String(p["Descrição do produto"] || "").toUpperCase();
+            return cod.includes(termo) || desc.includes(termo);
+        }).slice(0, 10);
+
+        if(filtro.length === 0) {
+            resDiv.innerHTML = "<small>Nenhum produto encontrado com este termo.</small>";
+        }
 
         filtro.forEach(p => {
             const div = document.createElement('div');
@@ -123,9 +125,9 @@
 
     function adicionar(codigo) {
         const canal = document.getElementById('perfil_fiscal').value;
-        if (!canal) { alert("⚠️ Por favor, escolha a Classificação Fiscal no Passo 1."); return; }
+        if (!canal) { alert("⚠️ Selecione o Canal de Venda primeiro!"); return; }
 
-        const prod = db.find(p => p["Código"] == codigo);
+        const prod = db.find(p => String(p["Código"]).trim() === String(codigo).trim());
         const qtd = parseFloat(document.getElementById(`qtd_${codigo}`).value) || 1;
         
         const precoUnit = converterPreco(prod[canal]);
@@ -147,19 +149,17 @@
         const lista = document.getElementById('carrinho_lista');
         let soma = 0;
         if (carrinho.length === 0) {
-            lista.innerHTML = "<em>Nenhum item adicionado.</em>";
-            document.getElementById('total_display').innerText = "Total: R$ 0,00";
+            lista.innerHTML = "<em>Lista vazia.</em>";
             return;
         }
         
         lista.innerHTML = carrinho.map(i => {
             soma += i.total;
             return `<div class="item-carrinho">
-                <span><strong>${i.qtd}x</strong> ${i.cod} - ${i.desc.substring(0,30)}...</span>
-                <span style="font-weight:bold;">R$ ${i.total.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+                <span><strong>${i.qtd}x</strong> ${i.cod} - ${i.desc}</span>
+                <span>R$ ${i.total.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
             </div>`;
         }).join('');
-        
         document.getElementById('total_display').innerText = `Total: R$ ${soma.toLocaleString('pt-BR', {minimumFractionDigits:2})}`;
     }
 
@@ -168,37 +168,22 @@
         const doc = new jsPDF();
         let y = 20;
 
-        doc.setFontSize(18); doc.setTextColor(0, 74, 153);
-        doc.text("ORÇAMENTO DE MATERIAIS - FLVX", 10, y);
-        
-        doc.setFontSize(10); doc.setTextColor(80, 80, 80);
-        y += 12; doc.text(`CLIENTE: ${document.getElementById('cli_nome').value}`, 10, y);
-        y += 6; doc.text(`CNPJ: ${document.getElementById('cli_cnpj').value} | CIDADE: ${document.getElementById('cli_local').value}`, 10, y);
-        y += 6; doc.text(`CANAL FISCAL: ${document.getElementById('perfil_fiscal').value}`, 10, y);
-        
-        y += 10; doc.setDrawColor(200, 200, 200); doc.line(10, y, 200, y);
+        doc.setFontSize(16); doc.text("ORÇAMENTO FLVX", 10, y);
+        doc.setFontSize(10);
+        y += 10; doc.text(`Cliente: ${document.getElementById('cli_nome').value}`, 10, y);
+        y += 5; doc.text(`Canal: ${document.getElementById('perfil_fiscal').value}`, 10, y);
+        y += 10; doc.line(10, y, 200, y);
         y += 10;
-        
-        doc.setFont(undefined, 'bold'); doc.setTextColor(0, 0, 0);
-        doc.text("PRODUTO", 10, y); doc.text("QTD", 140, y); doc.text("TOTAL", 175, y);
-        y += 8; doc.setFont(undefined, 'normal');
 
         carrinho.forEach(item => {
-            doc.text(`${item.cod} - ${item.desc.substring(0,40)}`, 10, y);
-            doc.text(`${item.qtd}`, 140, y);
-            doc.text(`R$ ${item.total.toFixed(2)}`, 175, y);
-            y += 7;
-            if(y > 275) { doc.addPage(); y = 20; }
+            doc.text(`${item.qtd}x ${item.cod} - ${item.desc.substring(0,40)}`, 10, y);
+            doc.text(`R$ ${item.total.toFixed(2)}`, 170, y);
+            y += 8;
         });
 
-        y += 12; doc.setFontSize(14); doc.setFont(undefined, 'bold');
-        doc.text(`VALOR TOTAL: ${document.getElementById('total_display').innerText}`, 10, y);
-        
-        y += 15; doc.setFontSize(10); doc.setFont(undefined, 'normal');
-        doc.text("OBSERVAÇÕES E CONDIÇÕES:", 10, y);
-        y += 6; doc.text(document.getElementById('obs').value, 10, y, {maxWidth: 180});
-
-        doc.save(`Orcamento_FLVX_${Date.now()}.pdf`);
+        y += 10;
+        doc.text(`TOTAL FINAL: ${document.getElementById('total_display').innerText}`, 10, y);
+        doc.save("orcamento_flvx.pdf");
     }
 </script>
 
