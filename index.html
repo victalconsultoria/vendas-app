@@ -1,237 +1,204 @@
 <!DOCTYPE html>
-
 <html lang="pt-br">
-
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>App de Cotação - Materiais de Construção</title>
-
+    <title>Portal do Representante - FLVX</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.3.2/papaparse.min.js"></script>
-
     <style>
-
-        body { font-family: sans-serif; margin: 20px; background: #f4f4f4; }
-
-        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-
-        input, select, button { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-
-        button { background: #007bff; color: white; font-weight: bold; cursor: pointer; border: none; }
-
-        button:hover { background: #0056b3; }
-
-        .produto-item { border-bottom: 1px solid #eee; padding: 10px 0; }
-
-        .carrinho { background: #e9ecef; }
-
+        :root { --primary: #004a99; --secondary: #f8f9fa; --accent: #28a745; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #eef2f7; color: #333; }
+        header { background: var(--primary); color: white; padding: 1rem; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .container { max-width: 800px; margin: 20px auto; padding: 10px; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        h3 { margin-top: 0; color: var(--primary); border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        input, select, textarea { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        .btn { background: var(--primary); color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; transition: 0.3s; }
+        .btn:hover { opacity: 0.9; }
+        .btn-add { background: var(--accent); padding: 8px; margin-top: 5px; width: auto; min-width: 120px; }
+        .produto-resultado { border: 1px solid #eee; padding: 15px; border-radius: 8px; margin-top: 10px; background: #fff; }
+        .item-carrinho { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+        .total-container { text-align: right; font-size: 18px; font-weight: bold; color: var(--primary); margin-top: 15px; }
     </style>
-
 </head>
-
 <body>
 
+<header>
+    <h1>FLVX - Sistema de Cotação</h1>
+</header>
 
-<h2>Cotação de Materiais</h2>
-
-
-<div class="card">
-
-    <h3>Dados do Cliente</h3>
-
-    <input type="text" id="razao" placeholder="Razão Social">
-
-    <input type="text" id="cnpj" placeholder="CNPJ">
-
-    <select id="perfilFiscal">
-
-        <option value="">Selecione a Classificação Fiscal</option>
-
-        <option value="SP REVENDA SN">SP REVENDA SIMPLES NACIONAL (SN)</option>
-
-        <option value="SP REVENDA LP">SP REVENDA LUCRO PRESUMIDO (LP)</option>
-
-        <option value="CONSTRUTORA">CONSTRUTORA</option>
-
+<div class="container">
+    <div class="card">
+        <h3>1. Dados do Cliente</h3>
+        <input type="text" id="cliente_rs" placeholder="Razão Social / Nome Fantasia">
+        <input type="text" id="cliente_cnpj" placeholder="CNPJ">
+        <input type="text" id="cliente_cidade" placeholder="Cidade / UF">
+        <select id="perfil_fiscal">
+            <option value="">Selecione a Classificação Fiscal</option>
+            <option value="SP REVENDA SN">SP REVENDA - Simples Nacional</option>
+            <option value="SP REVENDA LP">SP REVENDA - Lucro Presumido</option>
+            <option value="SP REVENDA LR">SP REVENDA - Lucro Real</option>
+            <option value="MG REVENDA SN">MG REVENDA - Simples Nacional</option>
+            <option value="SP ATACADO SN">SP ATACADO - Simples Nacional</option>
+            <option value="CONSTRUTORA">CONSTRUTORA</option>
         </select>
+        <input type="text" id="prazo_pgto" placeholder="Prazo de Pagamento (ex: 28/56 dias)">
+    </div>
 
+    <div class="card">
+        <h3>2. Consultar Preços</h3>
+        <input type="text" id="busca" placeholder="Digite código ou descrição..." onkeyup="buscar()">
+        <div id="resultados"></div>
+    </div>
+
+    <div class="card">
+        <h3>3. Resumo da Cotação</h3>
+        <div id="carrinho_lista"><em>Selecione produtos acima.</em></div>
+        <div class="total-container" id="total_geral">Total: R$ 0,00</div>
+        <hr>
+        <textarea id="obs" placeholder="Observações (ex: Frete por conta do cliente...)"></textarea>
+        <button class="btn" onclick="gerarPDF()">Gerar PDF e Enviar</button>
+    </div>
 </div>
-
-
-<div class="card">
-
-    <h3>Buscar Produto</h3>
-
-    <input type="text" id="busca" placeholder="Digite código ou nome..." onkeyup="buscarProduto()">
-
-    <div id="resultadoBusca"></div>
-
-</div>
-
-
-<div class="card carrinho">
-
-    <h3>Lista de Cotação</h3>
-
-    <div id="listaCarrinho"></div>
-
-    <button onclick="gerarPDF()">Gerar PDF / Enviar Orçamento</button>
-
-</div>
-
 
 <script>
-
-    let baseDados = [];
-
+    let db = [];
     let carrinho = [];
+    const LINK_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR2ZD5mHtSutLQKXCW5Ps1zG-EHdRs_zFdBBjOHR9VRK9Ag57iNbAFsb7799stO1w/pub?output=csv';
 
-
-    // URL do CSV Publicado do Google Drive (Substituir pelo teu link)
-
-    const urlCSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR2ZD5mHtSutLQKXCW5Ps1zG-EHdRs_zFdBBjOHR9VRK9Ag57iNbAFsb7799stO1w/pubhtml';
-
-
-    // Função para carregar dados
-
-    function carregarDados() {
-
-        Papa.parse(urlCSV, {
-
+    function inicializar() {
+        Papa.parse(LINK_CSV, {
             download: true,
-
             header: true,
-
-            complete: function(results) {
-
-                baseDados = results.data;
-
-                alert("Base de dados atualizada!");
-
-            }
-
+            skipEmptyLines: true,
+            complete: (res) => { db = res.data; console.log("Dados carregados:", db.length); },
+            error: () => { alert("Erro ao carregar base. Verifique a conexão."); }
         });
-
     }
 
-
-    // Busca de Produto
-
-    function buscarProduto() {
-
-        const termo = document.getElementById('busca').value.toLowerCase();
-
-        const lista = document.getElementById('resultadoBusca');
-
-        lista.innerHTML = "";
-
-
+    function buscar() {
+        const termo = document.getElementById('busca').value.toUpperCase();
+        const resDiv = document.getElementById('resultados');
+        resDiv.innerHTML = "";
         if(termo.length < 2) return;
 
-
-        const filtrados = baseDados.filter(p =>
-
-            p.Descricao.toLowerCase().includes(termo) || p.Codigo.includes(termo)
-
+        const filtro = db.filter(p => 
+            (p.Codigo && p.Codigo.toUpperCase().includes(termo)) || 
+            (p.Descricao && p.Descricao.toUpperCase().includes(termo))
         ).slice(0, 5);
 
-
-        filtrados.forEach(p => {
-
+        filtro.forEach(p => {
             const div = document.createElement('div');
-
-            div.className = 'produto-item';
-
+            div.className = 'produto-resultado';
             div.innerHTML = `
-
-                <strong>${p.Codigo} - ${p.Descricao}</strong><br>
-
-                Preço NF: R$ ${p.PrecoNF} | <button onclick='addCarrinho("${p.Codigo}")'>Adicionar</button>
-
+                <strong>${p.Codigo}</strong> - ${p.Descricao}<br>
+                <small>IPI: ${p.IPI || '0'}% | Preço Base: R$ ${p.PrecoNF || '0,00'}</small><br>
+                <input type="number" id="qtd_${p.Codigo}" value="1" min="1" style="width: 70px; display:inline-block; margin-right:10px;">
+                <button class="btn btn-add" onclick="add('${p.Codigo}')">Adicionar</button>
             `;
-
-            lista.appendChild(div);
-
+            resDiv.appendChild(div);
         });
-
     }
 
+    function add(codigo) {
+        const perfil = document.getElementById('perfil_fiscal').value;
+        if(!perfil) { alert("Selecione o perfil fiscal no Passo 1!"); return; }
 
-    function addCarrinho(codigo) {
+        const prod = db.find(p => p.Codigo === codigo);
+        const qtd = parseFloat(document.getElementById(`qtd_${codigo}`).value);
+        
+        // Limpeza de string para número (remove R$ e converte vírgula em ponto)
+        let precoLimpo = prod[perfil].replace('R$', '').replace('.', '').replace(',', '.').trim();
+        const precoNum = parseFloat(precoLimpo) || 0;
 
-        const prod = baseDados.find(p => p.Codigo === codigo);
-
-        const perfil = document.getElementById('perfilFiscal').value;
-
-       
-
-        if(!perfil) return alert("Selecione o perfil fiscal primeiro!");
-
-
-        // Aqui o sistema busca o preço na coluna correspondente ao perfil
-
-        const precoCalculado = prod[perfil] || prod.PrecoNF;
-
-
-        carrinho.push({...prod, precoFinal: precoCalculado});
-
-        atualizarCarrinho();
-
+        carrinho.push({
+            cod: prod.Codigo,
+            desc: prod.Descricao,
+            qtd: qtd,
+            precoUnit: precoNum,
+            subtotal: qtd * precoNum
+        });
+        
+        document.getElementById('busca').value = "";
+        document.getElementById('resultados').innerHTML = "";
+        renderCarrinho();
     }
 
-
-    function atualizarCarrinho() {
-
-        const lista = document.getElementById('listaCarrinho');
-
-        lista.innerHTML = carrinho.map(i => `<div>${i.Descricao} - R$ ${i.precoFinal}</div>`).join('');
-
+    function renderCarrinho() {
+        const lista = document.getElementById('carrinho_lista');
+        let total = 0;
+        lista.innerHTML = carrinho.map((i, index) => {
+            total += i.subtotal;
+            return `
+            <div class="item-carrinho">
+                <span>${i.qtd}x <strong>${i.cod}</strong></span>
+                <span>${i.desc.substring(0,25)}...</span>
+                <span>R$ ${i.subtotal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+            </div>`;
+        }).join('');
+        document.getElementById('total_geral').innerText = `Total: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
     }
 
-
-    async function gerarPDF() {
-
+    function gerarPDF() {
         const { jsPDF } = window.jspdf;
-
         const doc = new jsPDF();
+        let y = 20;
 
-       
+        doc.setFontSize(18);
+        doc.setTextColor(0, 74, 153);
+        doc.text("ORÇAMENTO - FLVX", 10, y);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        y += 12;
+        doc.text(`Cliente: ${document.getElementById('cliente_rs').value}`, 10, y);
+        y += 6;
+        doc.text(`CNPJ: ${document.getElementById('cliente_cnpj').value} | Cidade: ${document.getElementById('cliente_cidade').value}`, 10, y);
+        y += 6;
+        doc.text(`Prazo: ${document.getElementById('prazo_pgto').value} | Canal: ${document.getElementById('perfil_fiscal').value}`, 10, y);
+        
+        y += 10;
+        doc.line(10, y, 200, y);
+        y += 10;
 
-        doc.text("Orçamento de Materiais", 10, 10);
+        doc.setFont(undefined, 'bold');
+        doc.text("Item", 10, y);
+        doc.text("Qtd", 130, y);
+        doc.text("Unit.", 155, y);
+        doc.text("Total", 185, y);
+        y += 7;
+        doc.setFont(undefined, 'normal');
 
-        doc.text(`Cliente: ${document.getElementById('razao').value}`, 10, 20);
-
-       
-
-        let y = 30;
-
+        let totalFinal = 0;
         carrinho.forEach(item => {
-
-            doc.text(`${item.Codigo} - ${item.Descricao}: R$ ${item.precoFinal}`, 10, y);
-
-            y += 10;
-
+            totalFinal += item.subtotal;
+            doc.text(`${item.cod} - ${item.desc.substring(0, 45)}`, 10, y);
+            doc.text(`${item.qtd}`, 130, y);
+            doc.text(`${item.precoUnit.toFixed(2)}`, 155, y);
+            doc.text(`${item.subtotal.toFixed(2)}`, 185, y);
+            y += 8;
+            if(y > 270) { doc.addPage(); y = 20; }
         });
 
+        y += 10;
+        doc.setFontSize(14);
+        doc.text(`VALOR TOTAL DA COTAÇÃO: R$ ${totalFinal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 10, y);
+        
+        y += 15;
+        doc.setFontSize(10);
+        doc.text("Observações:", 10, y);
+        y += 6;
+        doc.text(document.getElementById('obs').value, 10, y, { maxWidth: 180 });
 
-        doc.save("orcamento.pdf");
-
-        alert("PDF Gerado! Agora pode partilhar via WhatsApp.");
-
+        doc.save(`FLVX_${document.getElementById('cliente_rs').value}.pdf`);
     }
 
-
-    // Iniciar carga
-
-    window.onload = carregarDados;
-
+    window.onload = inicializar;
 </script>
 
+</body>
+</html>
 
 </body>
 
